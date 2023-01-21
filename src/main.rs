@@ -1,8 +1,11 @@
+#![windows_subsystem = "windows"]
+
 extern crate gl;
 extern crate sdl2;
 
 mod camera_mod;
 mod vector_math;
+mod scene;
 
 use camera_mod::Camera;
 use gl::types::*;
@@ -10,13 +13,16 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::keyboard::Scancode;
 use sdl2::video::GLProfile;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
+use scene::*;
 use vector_math::Vector3;
 
 const MOUSE_SENSITIVITY: f32 = 0.002;
 
 fn main() {
+    // Making the main window
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -34,7 +40,7 @@ fn main() {
     gl::load_with(|name| video_subsystem.gl_get_proc_address(name) as *const _);
     debug_assert_eq!(gl_attr.context_profile(), GLProfile::Core);
     debug_assert_eq!(gl_attr.context_version(), (3, 3));
-
+    ////////////////////////////////////////////////////////////
     //screen surface
     let vertex_array: [f32; 18] = [
         // first triangle
@@ -69,31 +75,32 @@ fn main() {
         );
         gl::EnableVertexAttribArray(0);
     }
+    ////////////////////////////////////////////////////////////
+    // Making the shader program
     let vertex_source = fs::read_to_string(r"shaders\vertex.glsl").unwrap();
     let fragment_source = fs::read_to_string(r"shaders\fragment.glsl").unwrap();
     let shader_program: GLuint = make_program(vertex_source, fragment_source);
-    //
-    // program uniforms
+    ////////////////////////////////////////////////////////////
+    // Program uniforms
     let uniform_resolution =
         unsafe { gl::GetUniformLocation(shader_program, "resolution\0".as_ptr() as *const i8) };
-    let resolution_x = window.size().0;
-    let resolution_y = window.size().1;
-    // println!("{}, {}", resolution_x, resolution_y);
+    let resolution = window.size();
     unsafe {
         gl::UseProgram(shader_program);
-        gl::Uniform2f(uniform_resolution, resolution_x as f32, resolution_y as f32);
+        gl::Uniform2f(uniform_resolution, resolution.0 as f32, resolution.1 as f32);
     }
     let uniform_camera_pos =
         unsafe { gl::GetUniformLocation(shader_program, "cameraPos\0".as_ptr() as *const i8) };
     let uniform_camera_rot =
         unsafe { gl::GetUniformLocation(shader_program, "cameraRot\0".as_ptr() as *const i8) };
-    // println!(
-    //     "{}, {}, {}",
-    //     uniform_camera_pos, uniform_camera_rot, uniform_resolution
-    // );
+
+    
+    let mut scene = Scene {
+        objects: HashMap::new()
+    };
+    scene.objects.insert(String::from("Sphere"), Box::new(Sphere{pos: Vector3::new(0.0, 2.0, 0.0), radius: 2.0}));
     //
     // Main gameloop
-    // let time = std::time::Instant::now();
     let mut camera = Camera {
         pos: Vector3::new(0.0, 0.0, 5.0),
         rot: Vector3::new(0.0, 0.0, 0.0),
@@ -180,9 +187,9 @@ fn make_shader(shader_source: String, shader_type: GLenum) -> u32 {
             panic!("{} shader, compilation failed", {
                 if shader_type == gl::VERTEX_SHADER {
                     "Vertex "
-                } else {
+                } else if shader_type == gl::FRAGMENT_SHADER {
                     "Fragment"
-                }
+                } else {"Unknown"}
             });
         }
         shader
